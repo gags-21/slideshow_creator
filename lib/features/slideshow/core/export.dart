@@ -29,25 +29,29 @@ Future<String?> exportSlideshowVideo({
 
   // 3. FFmpeg: Generate slideshow from images
   final cmd1 =
-      '-framerate 1/3 -i ${frameDir.path}/frame_%02d.png -vf format=yuv420p "$outputVideoPath"';
+      '-y -framerate 1/3 -i "${frameDir.path}/frame_%02d.png" -vf format=yuv420p "$outputVideoPath"';
   final session1 = await FFmpegKit.execute(cmd1);
   final returnCode1 = await session1.getReturnCode();
 
   if (returnCode1?.isValueSuccess() != true ||
       !File(outputVideoPath).existsSync()) {
-    print('❌ FFmpeg slideshow creation failed');
+    print('FFmpeg slideshow creation failed');
     return null;
   }
 
   // 4. FFmpeg: Merge with audio
+  print(File(outputVideoPath).existsSync()); // should be true
+  print(File(musicFile.path).existsSync()); // should be true
+
   final cmd2 =
-      '-i "$outputVideoPath" -i "${musicFile.path}" -shortest -c:v copy -c:a aac "$finalVideoPath"';
+      '-y -i "$outputVideoPath" -i "${musicFile.path}" -shortest -c:v libx264 -c:a aac -b:a 192k -pix_fmt yuv420p "$finalVideoPath"';
+
   final session2 = await FFmpegKit.execute(cmd2);
   final returnCode2 = await session2.getReturnCode();
 
   if (returnCode2?.isValueSuccess() != true ||
       !File(finalVideoPath).existsSync()) {
-    print('❌ FFmpeg audio merge failed');
+    print('FFmpeg audio merge failed');
     return null;
   }
 
@@ -61,7 +65,7 @@ Future<String?> exportSlideshowVideo({
       await File(finalVideoPath).copy(savedVideo.path);
       return savedVideo.path;
     } catch (e) {
-      print('❌ Error copying to Downloads: $e');
+      print('Error copying to Downloads: $e');
       return null;
     }
   }

@@ -128,13 +128,17 @@ class _SlideshowPageState extends State<SlideshowPage> {
 
     // 3. Show result
     if (exportedVideoPath != null && context.mounted) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Video exported to $exportedVideoPath')),
       );
+      Navigator.pop(context);
     } else {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Export failed')));
+      Navigator.pop(context);
     }
   }
 
