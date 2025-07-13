@@ -1,9 +1,15 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:cactro_test_mobile/features/slideshow/core/export.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 enum SlideShowAnimation { fade, slide }
 
@@ -59,7 +65,81 @@ class _SlideshowPageState extends State<SlideshowPage> {
   }
 
   // download file
-  Future<void> downloadFile() async {}
+  Future<bool> requestStoragePermission() async {
+    if (Platform.isAndroid) {
+      if (await Permission.manageExternalStorage.isGranted) return true;
+
+      final status = await Permission.manageExternalStorage.request();
+      return status.isGranted;
+    }
+    return true; // iOS doesn't need this
+  }
+
+  Future<File> captureCurrentFrame(String path) async {
+    final boundary =
+        _captureKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+    final image = await boundary.toImage(pixelRatio: 2.0);
+    final byteData = await image.toByteData(format: ImageByteFormat.png);
+    final buffer = byteData!.buffer.asUint8List();
+    final file = File(path);
+    await file.writeAsBytes(buffer);
+    return file;
+  }
+
+  Future<void> downloadFile() async {
+    if (Platform.isAndroid) {
+      final hasPermission = await requestStoragePermission();
+      if (!hasPermission) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("Permission required to save to Downloads"),
+          ),
+        );
+        return;
+      }
+    }
+    final frameDir = Directory(
+      '${(await getTemporaryDirectory()).path}/frames',
+    );
+    if (!frameDir.existsSync()) frameDir.createSync();
+
+    List<File> frameImages = [];
+
+    for (int i = 0; i < widget.images.length; i++) {
+      setState(() {
+        currentIndex = i;
+      });
+      await Future.delayed(Duration(seconds: 1)); // animation duration
+      final file = await captureCurrentFrame('${frameDir.path}/frame_$i.png');
+      frameImages.add(file);
+    }
+
+    // 1. Copy the bundled audio file to a temp location
+    final musicByteData = await rootBundle.load('assets/music.mp3');
+    final tempDir = await getTemporaryDirectory();
+    final musicFile = File('${tempDir.path}/music.mp3');
+    await musicFile.writeAsBytes(musicByteData.buffer.asUint8List());
+
+    // 2. Export video using core/export.dart
+    final exportedVideoPath = await exportSlideshowVideo(
+      imageFiles: frameImages,
+      musicFile: musicFile,
+    );
+
+    // 3. Show result
+    if (exportedVideoPath != null && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Video exported to $exportedVideoPath')),
+      );
+    } else {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Export failed')));
+    }
+  }
+
+  // keys for video export
+  final GlobalKey _captureKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
@@ -68,69 +148,72 @@ class _SlideshowPageState extends State<SlideshowPage> {
         title: const Text('Slideshow'),
         actions: [
           IconButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => downloadFile(),
             icon: const Icon(Icons.file_download),
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          Image.network(
-            'https://img.freepik.com/free-vector/simple-blue-gradient-background-vector-business_53876-166894.jpg',
-            fit: BoxFit.cover,
-            height: double.infinity,
-            width: double.infinity,
-          ),
-          Center(
-            child: AnimatedSwitcher(
-              duration: const Duration(seconds: 1),
-              transitionBuilder: (child, animation) {
-                switch (currentAnimation) {
-                  case SlideShowAnimation.fade:
-                    return FadeTransition(opacity: animation, child: child);
-                  case SlideShowAnimation.slide:
-                    return SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(1.0, 0.0),
-                        end: Offset.zero,
-                      ).animate(animation),
-                      child: child,
-                    );
-                }
-              },
-              child: Image.file(
-                File(widget.images[currentIndex].path),
-                key: ValueKey(currentIndex),
-                fit: BoxFit.contain,
+      body: RepaintBoundary(
+        key: _captureKey,
+        child: Stack(
+          children: [
+            Image.network(
+              'https://img.freepik.com/free-vector/simple-blue-gradient-background-vector-business_53876-166894.jpg',
+              fit: BoxFit.cover,
+              height: double.infinity,
+              width: double.infinity,
+            ),
+            Center(
+              child: AnimatedSwitcher(
+                duration: const Duration(seconds: 1),
+                transitionBuilder: (child, animation) {
+                  switch (currentAnimation) {
+                    case SlideShowAnimation.fade:
+                      return FadeTransition(opacity: animation, child: child);
+                    case SlideShowAnimation.slide:
+                      return SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(1.0, 0.0),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: child,
+                      );
+                  }
+                },
+                child: Image.file(
+                  File(widget.images[currentIndex].path),
+                  key: ValueKey(currentIndex),
+                  fit: BoxFit.contain,
+                ),
               ),
             ),
-          ),
 
-          // control transition style
-          Positioned(
-            bottom: 40,
-            left: 0,
-            right: 0,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ElevatedButton(
-                  onPressed: () => setState(() {
-                    currentAnimation = SlideShowAnimation.fade;
-                  }),
-                  child: const Text("Fade"),
-                ),
-                const SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: () => setState(() {
-                    currentAnimation = SlideShowAnimation.slide;
-                  }),
-                  child: const Text("Slide"),
-                ),
-              ],
+            // control transition style
+            Positioned(
+              bottom: 40,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton(
+                    onPressed: () => setState(() {
+                      currentAnimation = SlideShowAnimation.fade;
+                    }),
+                    child: const Text("Fade"),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton(
+                    onPressed: () => setState(() {
+                      currentAnimation = SlideShowAnimation.slide;
+                    }),
+                    child: const Text("Slide"),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

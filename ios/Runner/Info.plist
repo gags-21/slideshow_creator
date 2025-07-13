@@ -4,7 +4,9 @@
 <dict>
 	<!-- permissions -->
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Your app needs access to the photo library to select photos and videos.</string>
+	<string>We need permission to access your photo library to get images.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>We need permission to save the final slideshow video to your gallery.</string>
 	<!--  -->
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>

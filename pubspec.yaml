@@ -38,6 +38,10 @@ dependencies:
   dio: ^5.8.0+1
   audioplayers: ^6.5.0
   image_picker: ^1.1.2
+  ffmpeg_kit_flutter_new: ^2.0.0
+  path_provider: ^2.1.5
+  permission_handler: ^12.0.1
+  external_path: ^2.2.0
 
 dev_dependencies:
   flutter_test:

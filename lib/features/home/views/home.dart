@@ -16,11 +16,7 @@ class _MyHomePageState extends State<MyHomePage> {
     if (picked.length < 3 || picked.length > 5) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Please select between 3 to 5 images to create Slide-Show',
-          ),
-        ),
+        const SnackBar(content: Text('Please select between 3 to 5 images')),
       );
     } else {
       if (!mounted) return;
